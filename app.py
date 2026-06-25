@@ -346,12 +346,12 @@ def construir_datos(url_tarifas, url_combustibles, tabla_precios):
 
     precios_electricos = parsear_precios_electricos(tabla_precios)
 
-    tur_gas = extraer_tur_gas(tablas_tarifas)
+    tur_gas = extraer_tur_gas(texto_tarifas)
     alquiler_gas_1, alquiler_gas_2 = extraer_alquiler_gas(tablas_tarifas, texto_tarifas)
 
     valores_electricidad = {
-        "Precio potencia PUNTA": extraer_potencia(tablas_tarifas, "P1"),
-        "Precio potencia VALLE": extraer_potencia(tablas_tarifas, "P2"),
+        "Precio potencia PUNTA": extraer_potencia(texto_tarifas, "P1"),
+        "Precio potencia VALLE": extraer_potencia(texto_tarifas, "P2"),
         "Precio energía PUNTA": precios_electricos["Precio energía PUNTA"],
         "Precio energía LLANO": precios_electricos["Precio energía LLANO"],
         "Precio energía VALLE": precios_electricos["Precio energía VALLE"],
