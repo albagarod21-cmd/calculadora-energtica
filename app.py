@@ -520,7 +520,7 @@ if st.button("Generar informe PDF"):
     try:
         with st.spinner("Leyendo PDFs, extrayendo datos y generando informe..."):
             datos = construir_datos(url_tarifas, url_combustibles, tabla_precios)
-           mostrar_debug:
+            mostrar_debug:
     pdf_tarifas_debug = descargar_pdf(url_tarifas)
     texto_tarifas_debug, tablas_tarifas_debug = leer_pdf(pdf_tarifas_debug)
 
