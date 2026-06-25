@@ -512,11 +512,30 @@ tabla_precios = st.text_area(
 )
 
 st.subheader("3. Generar informe")
+st.subheader("Depuración")
+
+mostrar_debug = st.checkbox("Mostrar tablas extraídas de los PDFs")
 
 if st.button("Generar informe PDF"):
     try:
         with st.spinner("Leyendo PDFs, extrayendo datos y generando informe..."):
             datos = construir_datos(url_tarifas, url_combustibles, tabla_precios)
+            if mostrar_debug:
+    pdf_tarifas_debug = descargar_pdf(url_tarifas)
+    texto_tarifas_debug, tablas_tarifas_debug = leer_pdf(pdf_tarifas_debug)
+
+    pdf_combustibles_debug = descargar_pdf(url_combustibles)
+    texto_combustibles_debug, tablas_combustibles_debug = leer_pdf(pdf_combustibles_debug)
+
+    st.markdown("### Tablas detectadas en Tarifas Reguladas")
+    for i, tabla in enumerate(tablas_tarifas_debug):
+        st.write(f"Tabla {i + 1}")
+        st.dataframe(tabla)
+
+    st.markdown("### Tablas detectadas en Combustibles")
+    for i, tabla in enumerate(tablas_combustibles_debug):
+        st.write(f"Tabla {i + 1}")
+        st.dataframe(tabla)
             faltantes = detectar_faltantes(datos)
             pdf = generar_pdf(datos)
 
