@@ -136,43 +136,34 @@ def fila_texto(fila):
 # EXTRACCION PDF TARIFAS REGULADAS
 # ============================================================
 
-def extraer_potencia(tablas, periodo):
+def extraer_potencia(texto, periodo):
     """
-    periodo = P1 para punta
-    periodo = P2 para valle
+    Extrae P1 o P2 del apartado:
+    2.2 PEAJES DE ACCESO Y CARGOS A BAJA TENSIÓN (< 1 kV)
 
     Regla:
-    tabla baja tensión 2.0TD, potencia <= 15 kW,
-    fila P1/P2, suma de peaje transporte y distribución + cargos.
+    fila P1/P2 de potencia <= 15 kW.
+    Resultado = primer valor de precio + segundo valor de precio.
+    Ignora porcentajes de variación.
     """
-    for tabla in tablas:
-        texto_tabla = " ".join(fila_texto(fila) for fila in tabla).lower()
+    inicio = texto.find("2.2 PEAJES DE ACCESO Y CARGOS A BAJA TENSIÓN")
+    fin = texto.find("2.3 PEAJES DE ACCESO Y CARGOS A ALTA TENSIÓN")
 
-        if "2.0td" not in texto_tabla:
-            continue
+    if inicio == -1:
+        return "NO_ENCONTRADO"
 
-        for fila in tabla:
-            texto = fila_texto(fila)
-            texto_lower = texto.lower()
+    bloque = texto[inicio:fin if fin != -1 else None]
 
-            if re.search(rf"\b{periodo.lower()}\b", texto_lower):
-                numeros = []
+    patron = rf"\b{periodo}\b\s+(\d+,\d+)\s+[-+]?\d+,\d+%\s+(\d+,\d+)"
+    match = re.search(patron, bloque)
 
-                for celda in fila:
-                    celda_txt = normalizar_texto(celda)
+    if not match:
+        return "NO_ENCONTRADO"
 
-                    # Evitar que 2.0TD o 15 kW entren como valores de cálculo.
-                    if "2.0" in celda_txt or "15" == celda_txt.strip():
-                        continue
+    peaje = convertir_numero(match.group(1))
+    cargos = convertir_numero(match.group(2))
 
-                    numeros.extend(extraer_numeros(celda_txt))
-
-                candidatos = [n for n in numeros if 0 <= n < 100]
-
-                if len(candidatos) >= 2:
-                    return candidatos[0] + candidatos[1]
-
-    return "NO_ENCONTRADO"
+    return peaje + cargos
 
 
 def extraer_alquiler_contador_electrico(tablas, texto):
@@ -210,7 +201,11 @@ def extraer_alquiler_contador_electrico(tablas, texto):
     return "NO_ENCONTRADO"
 
 
-def extraer_tur_gas(tablas):
+def extraer_tur_gas(texto):
+    """
+    Extrae TUR 1 y TUR 2 desde el texto del PDF.
+    Mantiene los términos variables en cent/kWh.
+    """
     resultado = {
         "TUR 1 término fijo": "NO_ENCONTRADO",
         "TUR 2 término fijo": "NO_ENCONTRADO",
@@ -218,29 +213,28 @@ def extraer_tur_gas(tablas):
         "TUR 2 término variable": "NO_ENCONTRADO",
     }
 
-    for tabla in tablas:
-        for fila in tabla:
-            texto = fila_texto(fila).lower()
+    texto_lineal = re.sub(r"\s+", " ", texto)
 
-            if "tur" not in texto:
-                continue
+    patron_tur1 = (
+        r"TUR\.?\s*1\.\s*Consumo\s*≤\s*5\.000\s*kWh/año\s+"
+        r"(\d+,\d+)\s+[-+]?\d+,\d+%\s+(\d+,\d+)"
+    )
 
-            numeros = []
-            for celda in fila:
-                numeros.extend(extraer_numeros(celda))
+    patron_tur2 = (
+        r"TUR\.?\s*2\.\s*5\.000\s*kWh/año\s*<\s*Consumo\s*≤\s*15\.000\s*kWh/año\s+"
+        r"(\d+,\d+)\s+[-+]?\d+,\d+%\s+(\d+,\d+)"
+    )
 
-            candidatos = [n for n in numeros if 0 < n < 100]
+    m1 = re.search(patron_tur1, texto_lineal)
+    m2 = re.search(patron_tur2, texto_lineal)
 
-            if len(candidatos) < 2:
-                continue
+    if m1:
+        resultado["TUR 1 término fijo"] = convertir_numero(m1.group(1))
+        resultado["TUR 1 término variable"] = convertir_numero(m1.group(2))
 
-            if re.search(r"tur\.?\s*1", texto) and ("5.000" in texto or "5000" in texto):
-                resultado["TUR 1 término fijo"] = candidatos[0]
-                resultado["TUR 1 término variable"] = candidatos[1]
-
-            elif re.search(r"tur\.?\s*2", texto) and ("15.000" in texto or "15000" in texto):
-                resultado["TUR 2 término fijo"] = candidatos[0]
-                resultado["TUR 2 término variable"] = candidatos[1]
+    if m2:
+        resultado["TUR 2 término fijo"] = convertir_numero(m2.group(1))
+        resultado["TUR 2 término variable"] = convertir_numero(m2.group(2))
 
     return resultado
 
@@ -278,30 +272,19 @@ def extraer_alquiler_gas(tablas, texto):
 
 def extraer_gasoleo_c(tablas, texto):
     """
-    Apartado precios energéticos liberalizados,
-    carburantes y productos petrolíferos,
-    fila Gasóleo C, columna c€/kWh.
+    Extrae Gasóleo C, columna c€/kWh, de la tabla Con impuestos.
+    En una fila tipo:
+    Gasóleo C 1,256 11,69 32,48%
+    debe devolver 11,69, no 32,48.
     """
-    for tabla in tablas:
-        for fila in tabla:
-            texto_fila = fila_texto(fila).lower()
-
-            if "gasóleo c" in texto_fila or "gasoleo c" in texto_fila:
-                numeros = extraer_numeros(texto_fila)
-
-                # En la fila puede haber varios precios. El c€/kWh suele ser un valor en rango 1-50.
-                candidatos = [n for n in numeros if 1 <= n <= 50]
-
-                if candidatos:
-                    return candidatos[-1]
-
-    # Respaldo por texto plano
     texto_lineal = re.sub(r"\s+", " ", texto)
-    patron = r"Gas[oó]leo\s*C.*?(\d+[,.]\d+)"
+
+    patron = r"Gas[oó]leo\s*C\s+(\d+,\d+)\s+(\d+,\d+)\s+[-+]?\d+,\d+%"
+
     match = re.search(patron, texto_lineal, flags=re.IGNORECASE)
 
     if match:
-        return convertir_numero(match.group(1))
+        return convertir_numero(match.group(2))
 
     return "NO_ENCONTRADO"
 
