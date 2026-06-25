@@ -547,4 +547,3 @@ if st.button("Generar informe PDF"):
     except Exception as error:
         st.error("No se pudo generar el informe.")
         st.exception(error)
-```
